@@ -4,7 +4,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from fastapi import HTTPException, status
 
 from models import Sensors, SensorData, SensorRequest, SensorDataRequest
-from db import SessionLocal
+from db_setup import SessionLocal
 router = APIRouter()
 
 def create_sensor(mac_address: str, db_session = None):

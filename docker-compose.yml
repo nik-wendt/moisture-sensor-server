@@ -1,0 +1,32 @@
+services:
+    web:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            target: api_service
+        command: python manage.py runserver
+        volumes:
+            - .:/app
+        ports:
+            - "8000:8000"
+        environment:
+            DATABASE_URL: 'sqlite:///app/db/requests.db'
+
+    nfty:
+        image: binwiederhier/ntfy:latest
+        ports:
+          - "80:80"
+        volumes:
+            - ./nfty:/etc/nfty
+        command:
+            - serve
+
+    alert_service:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            target: alert_service
+        volumes:
+            - .:/app
+        environment:
+            DATABASE_URL: 'sqlite:///app/db/requests.db'

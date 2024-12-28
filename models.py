@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import Column, String, ForeignKey, Float
 from pydantic import BaseModel
 
-from db import Base
+from db_setup import Base
 
 
 class Sensors(Base):
@@ -26,8 +26,7 @@ class SensorData(Base):
     value = Column(Float, nullable=False)
     created_at = Column(String, nullable=False, default=lambda: str(datetime.now()))
 
-# Create tables
-
+# Pydantic models
 class SensorDataRequest(BaseModel):
     mac_address: str
     value: float
