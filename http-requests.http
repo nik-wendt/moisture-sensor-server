@@ -1,0 +1,29 @@
+POST http://localhost:8000/register-sensor
+Content-Type: application/json
+
+{
+    "name": "test_sensor",
+    "mac_address": "00:00:00:00:00:00",
+    "threshold_green": 1000,
+    "threshold_yellow": 1000,
+    "threshold_red": 1000,
+    "description": "a test sensor"
+}
+
+###
+GET http://192.168.1.138:8000/sensors
+
+###
+GET http://localhost:8000/sensors
+
+###
+POST http://192.168.1.138:8000/log/
+Content-Type: application/json
+
+{
+    "mac_address": "00:00:00:00:00:00",
+    "value": 200
+}
+
+###
+GET http://192.168.1.138:8000/sensors/eQZhcME22ZL4X8gqRhJerV
