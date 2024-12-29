@@ -9,7 +9,7 @@ from settings import DATABASE_URL
 log = logging.getLogger(__name__)
 
 log.info("Connecting to database")
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(DATABASE_URL)
 log.info("Connected to database")
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -17,4 +17,4 @@ Base = declarative_base()
 
 # Database setup
 Base.metadata.create_all(bind=engine)
-print("Database setup complete")
+log.info("Created tables in database")

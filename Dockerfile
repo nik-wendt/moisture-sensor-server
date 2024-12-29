@@ -14,7 +14,6 @@ ENV PYTHONUNBUFFERED=1 \
     \
     # poetry
     # https://python-poetry.org/docs/configuration/#using-environment-variables
-    POETRY_VERSION=1.0.3 \
     # make poetry install to this location
     POETRY_HOME="/opt/poetry" \
     # make poetry create the virtual environment in the project's root
@@ -22,16 +21,17 @@ ENV PYTHONUNBUFFERED=1 \
 #    POETRY_VIRTUALENVS_IN_PROJECT=true \
     # do not ask any interactive question
     POETRY_NO_INTERACTION=1
+#    VENV_PATH="/opt/pysetup/.venv"
 
-COPY pyproject.toml poetry.lock ./
+COPY ./ /app
 
 RUN pip install poetry
 
 RUN poetry install
 
 FROM base AS alert_service
-CMD ["poetry", "run", "python", "app.py"]
+CMD ["poetry", "run", "python", "alert_service.py"]
 #CMD ["sleep", "1000"]
 
 FROM base AS api_service
-CMD ["uvicorn", "app:app", "--host", "http://192.168.1.138", "--port", "8000"]
+CMD ["poetry", "run", "uvicorn", "app:app", "--host", "http://192.168.1.138", "--port", "8000"]

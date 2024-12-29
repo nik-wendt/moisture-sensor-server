@@ -1,16 +1,24 @@
 services:
-    web:
+    api:
         build:
             context: .
             dockerfile: Dockerfile
             target: api_service
-        command: python manage.py runserver
-        volumes:
-            - .:/app
         ports:
             - "8000:8000"
         environment:
-            DATABASE_URL: 'sqlite:///app/db/requests.db'
+            DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/postgres'
+
+    postgres:
+        image: postgres:latest
+        environment:
+            POSTGRES_USER: 'postgres'
+            POSTGRES_PASSWORD: 'postgres'
+            POSTGRES_DB: 'postgres'
+        ports:
+            - "5432:5432"
+        volumes:
+            - ./data:/var/lib/postgresql/data
 
     nfty:
         image: binwiederhier/ntfy:latest
@@ -26,7 +34,5 @@ services:
             context: .
             dockerfile: Dockerfile
             target: alert_service
-        volumes:
-            - .:/app
         environment:
-            DATABASE_URL: 'sqlite:///app/db/requests.db'
+            DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/postgres'
