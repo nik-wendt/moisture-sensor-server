@@ -4,8 +4,8 @@ from datetime import datetime, timedelta
 
 import requests
 
-from db_setup import SessionLocal
-from models import SensorData, Sensors
+from db_setup import SessionLocal, StatusChoices
+from db_setup import Sensors, SensorData
 
 SLEEP_TIME = 30
 NTFY_URL = "http://192.168.1.138:80/"
@@ -16,9 +16,11 @@ HOURS_TO_AVERAGE = 3
 
 log = logging.getLogger(__name__)
 
+
 def get_db_session():
     db = SessionLocal()
     return db
+
 
 def check_for_missing_devices(sensors, db=None):
     # Should find any device that hasn't updated in a specified interval.
@@ -44,6 +46,7 @@ def check_for_threshold_breaches(sensors, db=None):
 
     red_alerts = []
     yellow_alerts = []
+    status_greens = []
     for sensor in sensors:
         last_3_readings = (
             db
@@ -60,9 +63,8 @@ def check_for_threshold_breaches(sensors, db=None):
         elif average_of_past_x_hours > sensor.threshold_yellow:
             yellow_alerts.append(sensor)
         elif average_of_past_x_hours > sensor.threshold_green:
-            continue
-    return red_alerts, yellow_alerts
-
+            status_greens.append(sensor)
+    return red_alerts, yellow_alerts, status_greens
 
 
 def send_ntfy_message(
@@ -79,23 +81,26 @@ def send_ntfy_message(
     response = requests.post(f"{NTFY_URL}{NTFY_TOPIC}", headers=headers, data=message)
     print(response.status_code, response.text)
 
+
 def main():
     while True:
         log.info("Checking for missing sensors & threshold breaches")
         db = get_db_session()
         sensors = db.query(Sensors).all()
+
         missing_sensors = check_for_missing_devices(sensors, db)
         log.info("Missing sensors: %s", missing_sensors)
         sensor_names = [sensor.name for sensor in missing_sensors]
-        send_ntfy_message(
-            f"The following sensors have not reported in over {MISSING_SENSOR_THRESHOLD_TIME} seconds:\n {"\n".join(sensor_names)}",
-            priority=3,
-            title="Missing Moisture Sensors",
-            tags="see_no_evil"
-        )
+        if missing_sensors:
+            send_ntfy_message(
+                f"The following sensors have not reported in over {MISSING_SENSOR_THRESHOLD_TIME} seconds:\n {"\n".join(sensor_names)}",
+                priority=3,
+                title="Missing Moisture Sensors",
+                tags="see_no_evil"
+            )
         log.info("Sent missing sensor alerts")
 
-        red_alerts, yellow_alerts = check_for_threshold_breaches(sensors, db)
+        red_alerts, yellow_alerts, status_greens = check_for_threshold_breaches(sensors, db)
         log.info("Red alerts: %s", red_alerts)
         log.info("Yellow alerts: %s", yellow_alerts)
 
@@ -118,9 +123,24 @@ def main():
                 tags="warning"
             )
             log.info("Sent yellow alerts")
+
+        # save statuses to the database
+        for sensor in red_alerts:
+            sensor.status = StatusChoices.RED
+        for sensor in yellow_alerts:
+            sensor.status = StatusChoices.YELLOW
+        for sensor in status_greens:
+            sensor.status = StatusChoices.GREEN
+        for sensor in missing_sensors:
+            sensor.status = StatusChoices.BLACK
+
+        db.commit()
+        db.close()
+
         log.info("Sleeping for %s seconds", SLEEP_TIME)
         time.sleep(SLEEP_TIME)
         log.info("Waking up. Starting next check...")
+
 
 if __name__ == "__main__":
     main()

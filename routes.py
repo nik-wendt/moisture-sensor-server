@@ -1,9 +1,12 @@
 import shortuuid
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import aliased
+from sqlalchemy import func, and_, case
 from fastapi import HTTPException, status
 
-from models import Sensors, SensorData, SensorRequest, SensorDataRequest
+from db_setup import Sensors, SensorData
+from models import SensorRequest, SensorDataRequest, SensorDataFilters
 from db_setup import SessionLocal
 router = APIRouter()
 
@@ -82,7 +85,80 @@ def get_sensors():
     finally:
         db.close()
 
-@router.get("/sensors/{sensor_id}")
+@router.get("/sensor-data")
+async def get_sensor_data(params: SensorDataFilters = Depends()):
+    try:
+        # Create a DB session
+        db = SessionLocal()
+
+        latest_logs_subquery = (
+            db.query(
+                SensorData.sensor_id,
+                func.max(SensorData.created_at).label("latest_created_at"),
+            )
+            .group_by(SensorData.sensor_id)
+            .subquery()
+        )
+
+        # Alias for SensorData table to join with the subquery
+        SensorAlias = aliased(SensorData)
+
+        # Query to get the most recent records
+        query = (
+            db.query(
+                # All SensorAlias fields
+                SensorAlias.id,
+                SensorAlias.sensor_id,
+                SensorAlias.value,
+                SensorAlias.created_at,
+                Sensors.status.label("status"),
+            )
+            .join(
+                latest_logs_subquery,
+                and_(
+                    SensorAlias.sensor_id == latest_logs_subquery.c.sensor_id,
+                    SensorAlias.created_at == latest_logs_subquery.c.latest_created_at,
+                ),
+            )
+            .join(Sensors, Sensors.id == SensorAlias.sensor_id)
+        )
+
+        # Apply filters for start_date and end_date if provided
+        if params.start_date:
+            query = query.filter(SensorAlias.created_at >= params.start_date)
+        if params.end_date:
+            query = query.filter(SensorAlias.created_at <= params.end_date)
+
+        # Apply pagination
+        logs = query.offset((params.page - 1) * params.page_size).limit(params.page_size).all()
+        total = query.count()
+
+        # Process the results
+        records = [
+            {
+                "sensor_id": record.sensor_id,
+                "value": record.value,
+                "created_at": record.created_at,
+                "status": record.status,
+            }
+            for record in logs
+        ]
+        return {"records": records, "total": total}
+
+    except SQLAlchemyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error: {str(e)}",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=e.status_code if hasattr(e, "status_code") else status.HTTP_400_BAD_REQUEST,
+            detail=f"Error processing request: {str(e)}",
+        )
+    finally:
+        db.close()
+
+@router.get("/sensor-data/{sensor_id}")
 async def get_logs(sensor_id: str):
     """Returns all log entries for a specific sensor."""
     try:
@@ -92,7 +168,8 @@ async def get_logs(sensor_id: str):
         # Query all log entries for the specified sensor
         logs = db.query(SensorData).filter(SensorData.sensor_id == sensor_id).all()
 
-        return {"logs": [log.__dict__ for log in logs]}
+
+        return {"records": [log.__dict__ for log in logs]}
     except SQLAlchemyError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

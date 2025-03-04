@@ -7,7 +7,9 @@ services:
         ports:
             - "8000:8000"
         environment:
-            DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/postgres'
+            DATABASE_URL: 'postgresql://postgres:postgres@postgres:5432/postgres'
+        depends_on:
+            -   postgres
 
     postgres:
         image: postgres:latest
@@ -20,12 +22,12 @@ services:
         volumes:
             - ./data:/var/lib/postgresql/data
 
-    nfty:
+    ntfy:
         image: binwiederhier/ntfy:latest
         ports:
           - "80:80"
         volumes:
-            - ./nfty:/etc/nfty
+            - ./ntfy:/etc/ntfy
         command:
             - serve
 
@@ -35,4 +37,4 @@ services:
             dockerfile: Dockerfile
             target: alert_service
         environment:
-            DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/postgres'
+            DATABASE_URL: 'postgresql://postgres:postgres@postgres:5432/postgres'

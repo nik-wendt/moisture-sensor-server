@@ -34,4 +34,4 @@ CMD ["poetry", "run", "python", "alert_service.py"]
 #CMD ["sleep", "1000"]
 
 FROM base AS api_service
-CMD ["poetry", "run", "uvicorn", "app:app", "--host", "http://192.168.1.138", "--port", "8000"]
+CMD ["poetry", "run", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
