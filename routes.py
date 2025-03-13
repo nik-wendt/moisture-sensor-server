@@ -88,23 +88,20 @@ async def get_sensor_data(params: SensorDataFilters = Depends()):
         # Query to get the most recent records with the sensor's name and status
         query = (
             db.query(
-                SensorAlias.id,
-                SensorAlias.sensor_id,
-                SensorAlias.value,
-                SensorAlias.created_at,
-                Sensors.name.label("name"),  # Get the sensor name from the Sensors table
+                SensorData.id,
+                SensorData.sensor_id,
+                SensorData.value,
+                SensorData.created_at,
+                Sensors.name.label("name"),
                 Sensors.status.label("status"),
                 Sensors.active.label("active"),
             )
-            .join(
-                latest_logs_subquery,
-                and_(
-                    SensorAlias.sensor_id == latest_logs_subquery.c.sensor_id,
-                    SensorAlias.created_at == latest_logs_subquery.c.latest_created_at,
-                ),
+            .join(Sensors, Sensors.id == SensorData.sensor_id)
+            .distinct(SensorData.sensor_id)
+            .order_by(
+                SensorData.sensor_id,
+                SensorData.created_at.desc()
             )
-            .join(Sensors, Sensors.id == SensorAlias.sensor_id)
-            .order_by(SensorAlias.created_at.desc())
         )
 
         # Apply filters for start_date and end_date if provided

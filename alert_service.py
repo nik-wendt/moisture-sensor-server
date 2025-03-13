@@ -1,6 +1,6 @@
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 import requests
 
@@ -35,8 +35,8 @@ def check_for_missing_devices(sensors, db=None):
             .filter(SensorData.sensor_id == sensor.id)
             .order_by(SensorData.created_at.desc()).first()
         )
-        latest_sensor_data_datetime = datetime.fromisoformat(latest_data.created_at)
-        if latest_data and latest_sensor_data_datetime > (datetime.now() - timedelta(seconds=MISSING_SENSOR_THRESHOLD_TIME)):
+        latest_sensor_data_datetime = latest_data.created_at
+        if latest_data and latest_sensor_data_datetime > (datetime.now(UTC) - timedelta(seconds=MISSING_SENSOR_THRESHOLD_TIME)):
             continue
         else:
             missing_sensors.append(sensor)
