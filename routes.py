@@ -1,13 +1,18 @@
+from datetime import datetime
+
+from typing import Optional
+
 import shortuuid
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, Session, joinedload
 from sqlalchemy import func, and_, case
 from fastapi import HTTPException, status
 
 from db_setup import Sensors, SensorData
 from models import SensorRequest, SensorDataRequest, SensorDataFilters
 from db_setup import SessionLocal
+
 router = APIRouter()
 
 def create_sensor(mac_address: str, db_session = None):
@@ -63,32 +68,9 @@ async def log_request(log_entry: SensorDataRequest):
     finally:
         db.close()
 
-@router.get("/sensors")
-def get_sensors():
-    """Returns a list of all sensors in the database."""
-    try:
-        # Create a DB session
-        db = SessionLocal()
-
-        # Query all sensors and append last 3 sensor readings as an average.
-        sensors = db.query(Sensors).all()
-        for sensor in sensors:
-            sensor.readings = db.query(SensorData).filter(SensorData.sensor_id == sensor.id).order_by(SensorData.created_at.desc()).limit(3).all()
-            sensor.average = sum([reading.value for reading in sensor.readings]) / len(sensor.readings)
-
-        return {"sensors": [sensor.__dict__ for sensor in sensors]}
-    except SQLAlchemyError as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}",
-        )
-    finally:
-        db.close()
-
 @router.get("/sensor-data")
 async def get_sensor_data(params: SensorDataFilters = Depends()):
     try:
-        # Create a DB session
         db = SessionLocal()
 
         latest_logs_subquery = (
@@ -100,18 +82,19 @@ async def get_sensor_data(params: SensorDataFilters = Depends()):
             .subquery()
         )
 
-        # Alias for SensorData table to join with the subquery
+        # Create an alias for SensorData for the join
         SensorAlias = aliased(SensorData)
 
-        # Query to get the most recent records
+        # Query to get the most recent records with the sensor's name and status
         query = (
             db.query(
-                # All SensorAlias fields
                 SensorAlias.id,
                 SensorAlias.sensor_id,
                 SensorAlias.value,
                 SensorAlias.created_at,
+                Sensors.name.label("name"),  # Get the sensor name from the Sensors table
                 Sensors.status.label("status"),
+                Sensors.active.label("active"),
             )
             .join(
                 latest_logs_subquery,
@@ -121,6 +104,7 @@ async def get_sensor_data(params: SensorDataFilters = Depends()):
                 ),
             )
             .join(Sensors, Sensors.id == SensorAlias.sensor_id)
+            .order_by(SensorAlias.created_at.desc())
         )
 
         # Apply filters for start_date and end_date if provided
@@ -133,16 +117,19 @@ async def get_sensor_data(params: SensorDataFilters = Depends()):
         logs = query.offset((params.page - 1) * params.page_size).limit(params.page_size).all()
         total = query.count()
 
-        # Process the results
+        # Process the results using the labeled "name" field
         records = [
             {
                 "sensor_id": record.sensor_id,
                 "value": record.value,
                 "created_at": record.created_at,
                 "status": record.status,
+                "name": record.name,
+                "active": record.active,
             }
             for record in logs
         ]
+
         return {"records": records, "total": total}
 
     except SQLAlchemyError as e:
@@ -159,17 +146,59 @@ async def get_sensor_data(params: SensorDataFilters = Depends()):
         db.close()
 
 @router.get("/sensor-data/{sensor_id}")
-async def get_logs(sensor_id: str):
+async def get_logs(
+        sensor_id: str,
+        start_date: Optional[datetime] = Query(None, description="Start date in ISO format"),
+        end_date: Optional[datetime] = Query(None, description="End date in ISO format")):
     """Returns all log entries for a specific sensor."""
     try:
         # Create a DB session
         db = SessionLocal()
 
-        # Query all log entries for the specified sensor
-        logs = db.query(SensorData).filter(SensorData.sensor_id == sensor_id).all()
+        query = (
+            db.query(SensorData)
+            .options(joinedload(SensorData.sensor))
+            .filter(SensorData.sensor_id == sensor_id)
+        )
 
+        if start_date:
+            query = query.filter(SensorData.created_at >= start_date)
+        if end_date:
+            query = query.filter(SensorData.created_at <= end_date)
+
+        # Query all log entries for the specified sensor
+        logs = (
+            query
+            .order_by(SensorData.created_at.asc())
+            .all()
+        )
 
         return {"records": [log.__dict__ for log in logs]}
+    except SQLAlchemyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error: {str(e)}",
+        )
+    finally:
+        db.close()
+
+
+@router.patch("/sensor-data/{sensor_id}")
+async def update_sensor(sensor_id: str, sensor_update: SensorRequest):
+    try:
+        db = SessionLocal()
+        sensor = db.query(Sensors).filter(Sensors.id == sensor_id).first()
+        if not sensor:
+            raise HTTPException(status_code=404, detail="Sensor not found")
+
+        # Only update the fields that are provided in the request
+        update_data = sensor_update.model_dump(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(sensor, key, value)
+
+        db.commit()
+        db.refresh(sensor)
+        return sensor
     except SQLAlchemyError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

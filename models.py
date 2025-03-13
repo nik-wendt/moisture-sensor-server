@@ -11,14 +11,16 @@ class SensorDataRequest(BaseModel):
     created_at: str | None = None
 
 class SensorRequest(BaseModel):
-    name: str
-    threshold_green: float
-    threshold_yellow: float
-    threshold_red: float
-    description: str
+    name: str = None
+    threshold_green: float = None
+    threshold_yellow: float = None
+    threshold_red: float = None
+    description: str = None
+    active: Optional[bool] = None
 
 class SensorDataFilters(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     page: int = Query(1, ge=1)
     page_size: int = Query(10, ge=1, le=100)
+    active: Optional[bool] = None

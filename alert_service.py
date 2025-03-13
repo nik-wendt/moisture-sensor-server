@@ -7,7 +7,7 @@ import requests
 from db_setup import SessionLocal, StatusChoices
 from db_setup import Sensors, SensorData
 
-SLEEP_TIME = 30
+SLEEP_TIME = 300
 NTFY_URL = "http://192.168.1.138:80/"
 NTFY_TOPIC = "moisture_sensor"
 # MISSING_SENSOR_THRESHOLD_TIME = 86400 # 1 day
@@ -30,7 +30,11 @@ def check_for_missing_devices(sensors, db=None):
 
     missing_sensors = []
     for sensor in sensors:
-        latest_data = db.query(SensorData).filter(SensorData.sensor_id == sensor.id).order_by(SensorData.created_at.desc()).first()
+        latest_data = (
+            db.query(SensorData)
+            .filter(SensorData.sensor_id == sensor.id)
+            .order_by(SensorData.created_at.desc()).first()
+        )
         latest_sensor_data_datetime = datetime.fromisoformat(latest_data.created_at)
         if latest_data and latest_sensor_data_datetime > (datetime.now() - timedelta(seconds=MISSING_SENSOR_THRESHOLD_TIME)):
             continue
@@ -48,16 +52,17 @@ def check_for_threshold_breaches(sensors, db=None):
     yellow_alerts = []
     status_greens = []
     for sensor in sensors:
-        last_3_readings = (
+        readings = (
             db
             .query(SensorData)
+            .join(Sensors, SensorData.sensor_id == Sensors.id)
             .filter(SensorData.sensor_id == sensor.id)
             .order_by(SensorData.created_at.desc())
             .limit(HOURS_TO_AVERAGE)
             .all()
         )
 
-        average_of_past_x_hours = sum([data.value for data in last_3_readings]) / HOURS_TO_AVERAGE
+        average_of_past_x_hours = sum([data.value for data in readings]) / HOURS_TO_AVERAGE
         if average_of_past_x_hours > sensor.threshold_red:
             red_alerts.append(sensor)
         elif average_of_past_x_hours > sensor.threshold_yellow:
@@ -86,7 +91,7 @@ def main():
     while True:
         log.info("Checking for missing sensors & threshold breaches")
         db = get_db_session()
-        sensors = db.query(Sensors).all()
+        sensors = db.query(Sensors).filter(Sensors.active == True)
 
         missing_sensors = check_for_missing_devices(sensors, db)
         log.info("Missing sensors: %s", missing_sensors)
