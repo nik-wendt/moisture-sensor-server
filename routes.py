@@ -24,8 +24,8 @@ def create_sensor(mac_address: str, db_session = None):
         mac_address=mac_address,
         name=f"Unnamed Sensor - {id}",
         threshold_green=20000,
-        threshold_yellow=30000,
-        threshold_red=35000,
+        threshold_yellow=10000,
+        threshold_red=1,
         description="A moisture sensor"
     )
     db_session.add(sensor)
@@ -36,6 +36,7 @@ def create_sensor(mac_address: str, db_session = None):
 @router.post("/log")
 async def log_request(log_entry: SensorDataRequest):
     """Logs incoming POST request to the database."""
+    max_value = 65535
     try:
         # Create a DB session
         db = SessionLocal()
@@ -45,7 +46,7 @@ async def log_request(log_entry: SensorDataRequest):
             sensor = create_sensor(log_entry.mac_address, db)
         sensor_data = SensorData(
             sensor_id=sensor.id,
-            value=log_entry.value,
+            value=max_value - log_entry.value,
         )
 
         # Add and commit the log entry to the database
@@ -196,6 +197,25 @@ async def update_sensor(sensor_id: str, sensor_update: SensorRequest):
         db.commit()
         db.refresh(sensor)
         return sensor
+    except SQLAlchemyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error: {str(e)}",
+        )
+    finally:
+        db.close()
+
+@router.delete("/sensors/{sensor_id}")
+async def delete_sensor(sensor_id: str):
+    try:
+        db = SessionLocal()
+        sensor = db.query(Sensors).filter(Sensors.id == sensor_id).first()
+        if not sensor:
+            raise HTTPException(status_code=404, detail="Sensor not found")
+
+        db.delete(sensor)
+        db.commit()
+        return {"message": "Sensor deleted successfully"}
     except SQLAlchemyError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -1,6 +1,6 @@
 import logging
 import time
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, UTC, timezone
 
 import requests
 
@@ -12,7 +12,7 @@ NTFY_URL = "http://192.168.1.138:80/"
 NTFY_TOPIC = "moisture_sensor"
 # MISSING_SENSOR_THRESHOLD_TIME = 86400 # 1 day
 MISSING_SENSOR_THRESHOLD_TIME = 300
-HOURS_TO_AVERAGE = 3
+SAMPLES_TO_AVERAGE = 3
 
 log = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ def check_for_missing_devices(sensors, db=None):
             .order_by(SensorData.created_at.desc()).first()
         )
         latest_sensor_data_datetime = latest_data.created_at
-        if latest_data and latest_sensor_data_datetime > (datetime.now(UTC) - timedelta(seconds=MISSING_SENSOR_THRESHOLD_TIME)):
+        if latest_data and latest_sensor_data_datetime > (datetime.now() - timedelta(seconds=MISSING_SENSOR_THRESHOLD_TIME)):
             continue
         else:
             missing_sensors.append(sensor)
@@ -58,17 +58,17 @@ def check_for_threshold_breaches(sensors, db=None):
             .join(Sensors, SensorData.sensor_id == Sensors.id)
             .filter(SensorData.sensor_id == sensor.id)
             .order_by(SensorData.created_at.desc())
-            .limit(HOURS_TO_AVERAGE)
+            .limit(SAMPLES_TO_AVERAGE)
             .all()
         )
 
-        average_of_past_x_hours = sum([data.value for data in readings]) / HOURS_TO_AVERAGE
-        if average_of_past_x_hours > sensor.threshold_red:
-            red_alerts.append(sensor)
-        elif average_of_past_x_hours > sensor.threshold_yellow:
-            yellow_alerts.append(sensor)
-        elif average_of_past_x_hours > sensor.threshold_green:
+        average_of_past_x_samples = sum([data.value for data in readings]) / SAMPLES_TO_AVERAGE
+        if average_of_past_x_samples > sensor.threshold_green:
             status_greens.append(sensor)
+        elif average_of_past_x_samples > sensor.threshold_yellow:
+            yellow_alerts.append(sensor)
+        elif average_of_past_x_samples > 0:
+            red_alerts.append(sensor)
     return red_alerts, yellow_alerts, status_greens
 
 
