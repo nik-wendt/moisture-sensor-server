@@ -38,3 +38,20 @@ services:
             target: alert_service
         environment:
             DATABASE_URL: 'postgresql://postgres:postgres@postgres:5432/postgres'
+    
+    migration:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            target: api_service
+        environment:
+            DATABASE_URL: 'postgresql://postgres:postgres@postgres:5432/postgres'
+        depends_on:
+            -   postgres
+        command: 
+          - poetry
+          - run
+          - alembic
+          - upgrade
+          - head
+
