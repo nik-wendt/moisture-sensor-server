@@ -67,7 +67,56 @@ async def log_request(log_entry: SensorDataRequest):
             detail=f"Error processing request: {str(e)}",
         )
     finally:
-        db.close()
+        ://www.youtube.com/watch?v=pAwR6w2TgxYoervices:
+    api:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            target: api_service
+        ports:
+            - "8000:8000"
+        environment:
+            DATABASE_URL: 'postgresql://postgres:postgres@postgres:5432/postgres'
+        depends_on:
+            -   postgres
+
+    postgres:
+        image: postgres:latest
+        environment:
+            POSTGRES_USER: 'postgres'
+            POSTGRES_PASSWORD: 'postgres'
+            POSTGRES_DB: 'postgres'
+        ports:
+            - "5432:5432"
+        volumes:
+            - ./data:/var/lib/postgresql/data
+
+    ntfy:
+        image: binwiederhier/ntfy:latest
+        ports:
+          - "80:80"
+        volumes:
+            - ./ntfy:/etc/ntfy
+        command:
+            - serve
+
+    alert_service:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            target: alert_service
+        environment:
+            DATABASE_URL: 'postgresql://postgres:postgres@postgres:5432/postgres'
+    
+    migration:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            target: api_service
+        environment:
+            DATABASE_URL: 'postgresql://postgres:postgres@postgres:5432/postgres'
+        depends_on:
+            -   postgres     db.close()
 
 @router.get("/sensor-data")
 async def get_sensor_data(params: SensorDataFilters = Depends()):

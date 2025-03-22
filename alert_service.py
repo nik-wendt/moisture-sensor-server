@@ -8,7 +8,7 @@ from db_setup import SessionLocal, StatusChoices
 from db_setup import Sensors, SensorData
 
 SLEEP_TIME = 300
-NTFY_URL = "http://192.168.1.138:80/"
+NTFY_URL = "http://pi-server:80/"
 NTFY_TOPIC = "moisture_sensor"
 # MISSING_SENSOR_THRESHOLD_TIME = 86400 # 1 day
 MISSING_SENSOR_THRESHOLD_TIME = 300
