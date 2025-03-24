@@ -26,3 +26,4 @@ class SensorDataFilters(BaseModel):
     active: Optional[bool] = None
     sort_by: Optional[str] = None
     order: Optional[str] = None
+    search: Optional[str] = None

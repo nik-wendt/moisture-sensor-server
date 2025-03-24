@@ -124,8 +124,14 @@ async def get_sensor_data(params: SensorDataFilters = Depends()):
             sort_field = sort_field.desc() if params.order == "desc" else sort_field.asc()
             query = query.order_by(sort_field)
         else:
-            # Default sorting by sensor id.
-            query = query.order_by(asc(subq.c.id))
+            # Default sorting by last updated.
+            query = query.order_by(desc(subq.c.created_at))
+
+        if params.search:
+            # search by name and id
+            query = query.filter(
+                Sensors.name.ilike(f"%{params.search}%") | Sensors.id.ilike(f"%{params.search}%")
+            )
 
         total = query.count()
 
