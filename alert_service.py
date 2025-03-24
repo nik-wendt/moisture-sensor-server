@@ -98,7 +98,8 @@ def main():
         sensor_names = [sensor.name for sensor in missing_sensors]
         if missing_sensors:
             send_ntfy_message(
-                f"The following sensors have not reported in over {MISSING_SENSOR_THRESHOLD_TIME} seconds:\n {"\n".join(sensor_names)}",
+                f"The following sensors have not reported in over {MISSING_SENSOR_THRESHOLD_TIME} seconds:\n {"\n".join(sensor_names)}\n"
+                f"Marking sensor as inactive. Reactivate with this link: http://pi-server:3000/sensor-data/{sensor.id}",
                 priority=3,
                 title="Missing Moisture Sensors",
                 tags="see_no_evil"
@@ -138,6 +139,7 @@ def main():
             sensor.status = StatusChoices.GREEN
         for sensor in missing_sensors:
             sensor.status = StatusChoices.BLACK
+            sensor.active = False
 
         db.commit()
         db.close()

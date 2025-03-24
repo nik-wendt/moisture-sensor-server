@@ -6,7 +6,7 @@ import shortuuid
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import aliased, Session, joinedload
-from sqlalchemy import func, and_, case
+from sqlalchemy import func, asc, desc
 from fastapi import HTTPException, status
 
 from db_setup import Sensors, SensorData
@@ -67,104 +67,72 @@ async def log_request(log_entry: SensorDataRequest):
             detail=f"Error processing request: {str(e)}",
         )
     finally:
-        ://www.youtube.com/watch?v=pAwR6w2TgxYoervices:
-    api:
-        build:
-            context: .
-            dockerfile: Dockerfile
-            target: api_service
-        ports:
-            - "8000:8000"
-        environment:
-            DATABASE_URL: 'postgresql://postgres:postgres@postgres:5432/postgres'
-        depends_on:
-            -   postgres
-
-    postgres:
-        image: postgres:latest
-        environment:
-            POSTGRES_USER: 'postgres'
-            POSTGRES_PASSWORD: 'postgres'
-            POSTGRES_DB: 'postgres'
-        ports:
-            - "5432:5432"
-        volumes:
-            - ./data:/var/lib/postgresql/data
-
-    ntfy:
-        image: binwiederhier/ntfy:latest
-        ports:
-          - "80:80"
-        volumes:
-            - ./ntfy:/etc/ntfy
-        command:
-            - serve
-
-    alert_service:
-        build:
-            context: .
-            dockerfile: Dockerfile
-            target: alert_service
-        environment:
-            DATABASE_URL: 'postgresql://postgres:postgres@postgres:5432/postgres'
-    
-    migration:
-        build:
-            context: .
-            dockerfile: Dockerfile
-            target: api_service
-        environment:
-            DATABASE_URL: 'postgresql://postgres:postgres@postgres:5432/postgres'
-        depends_on:
-            -   postgres     db.close()
+        db.close()
 
 @router.get("/sensor-data")
 async def get_sensor_data(params: SensorDataFilters = Depends()):
     try:
         db = SessionLocal()
 
-        latest_logs_subquery = (
+        # Create a subquery using a window function to pick the latest record per sensor.
+        subq = (
             db.query(
-                SensorData.sensor_id,
-                func.max(SensorData.created_at).label("latest_created_at"),
-            )
-            .group_by(SensorData.sensor_id)
-            .subquery()
+                SensorData,
+                func.row_number().over(
+                    partition_by=SensorData.sensor_id,
+                    order_by=SensorData.created_at.desc()
+                ).label("rn")
+            ).subquery()
         )
 
-        # Create an alias for SensorData for the join
-        SensorAlias = aliased(SensorData)
-
-        # Query to get the most recent records with the sensor's name and status
+        # Query only the latest record per sensor by filtering on rn == 1.
         query = (
             db.query(
-                SensorData.id,
-                SensorData.sensor_id,
-                SensorData.value,
-                SensorData.created_at,
+                subq.c.id,
+                subq.c.sensor_id,
+                subq.c.value,
+                subq.c.created_at,
                 Sensors.name.label("name"),
                 Sensors.status.label("status"),
                 Sensors.active.label("active"),
             )
-            .join(Sensors, Sensors.id == SensorData.sensor_id)
-            .distinct(SensorData.sensor_id)
-            .order_by(
-                SensorData.sensor_id,
-                SensorData.created_at.desc()
-            )
+            .join(Sensors, Sensors.id == subq.c.sensor_id)
+            .filter(subq.c.rn == 1)
         )
 
-        # Apply filters for start_date and end_date if provided
+        # Apply date filters if provided.
         if params.start_date:
-            query = query.filter(SensorAlias.created_at >= params.start_date)
+            query = query.filter(subq.c.created_at >= params.start_date)
         if params.end_date:
-            query = query.filter(SensorAlias.created_at <= params.end_date)
+            query = query.filter(subq.c.created_at <= params.end_date)
 
-        # Apply pagination
-        logs = query.offset((params.page - 1) * params.page_size).limit(params.page_size).all()
+        # Apply active filter.
+        # If the client does not send an "active" filter, default to active=True.
+        if params.active is not None:
+            query = query.filter(Sensors.active == params.active)
+
+        # Apply sorting.
+        if params.sort_by:
+            if params.sort_by == "name":
+                sort_field = Sensors.name
+            elif params.sort_by in ["value", "created_at"]:
+                # Access columns from the subquery for SensorData fields.
+                sort_field = getattr(subq.c, params.sort_by)
+            else:
+                sort_field = subq.c.id
+
+            sort_field = sort_field.desc() if params.order == "desc" else sort_field.asc()
+            query = query.order_by(sort_field)
+        else:
+            # Default sorting by sensor id.
+            query = query.order_by(asc(subq.c.id))
+
         total = query.count()
 
-        # Process the results using the labeled "name" field
+        # Apply pagination.
+        logs = query.offset((params.page - 1) * params.page_size).limit(params.page_size).all()
+
+        # Process the results.
         records = [
             {
                 "sensor_id": record.sensor_id,
@@ -186,11 +154,12 @@ async def get_sensor_data(params: SensorDataFilters = Depends()):
         )
     except Exception as e:
         raise HTTPException(
-            status_code=e.status_code if hasattr(e, "status_code") else status.HTTP_400_BAD_REQUEST,
+            status_code=getattr(e, "status_code", status.HTTP_400_BAD_REQUEST),
             detail=f"Error processing request: {str(e)}",
         )
     finally:
         db.close()
+
 
 @router.get("/sensor-data/{sensor_id}")
 async def get_logs(
