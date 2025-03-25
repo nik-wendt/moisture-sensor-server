@@ -34,7 +34,7 @@ class TryThing:
 
 
 def quick_sleep():
-    deep_sleep(60, ())
+    deep_sleep(180, ())
 
 
 def main():
