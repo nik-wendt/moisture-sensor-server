@@ -48,5 +48,6 @@ class SensorData(Base):
     sensor_id = Column(String, ForeignKey("Sensors.id"), nullable=False)
     value = Column(Float, nullable=False)
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    battery_value = Column(Float, nullable=True)
 
     sensor = relationship("Sensors", back_populates="data")

@@ -11,7 +11,7 @@ API_URL = getenv("API_URL", "")
 WIFI_SSID = getenv("WIFI_SSID", "")
 WIFI_PW = getenv("WIFI_PW", "")
 
-DEEP_SLEEP_TIME = 1 * 60  # 30 minutes
+DEEP_SLEEP_TIME = 30 * 60  # 30 minutes
 LOW_BATT_VALUE = 33200  # somewhere around 3.4 volts
 
 # SMD Expansion Board Pins
