@@ -8,13 +8,13 @@ import requests
 
 from db_setup import SessionLocal, StatusChoices
 from db_setup import Sensors, SensorData
-from sensor_code.config import LOW_BATT_VALUE
+from sensor_code.config import LOW_BATT_VALUE, DEEP_SLEEP_TIME
 
 SLEEP_TIME = 300
 NTFY_URL = "http://pi-server:80/"
 NTFY_TOPIC = "moisture_sensor"
 # MISSING_SENSOR_THRESHOLD_TIME = 86400 # 1 day
-MISSING_SENSOR_THRESHOLD_TIME = 300
+MISSING_SENSOR_THRESHOLD_TIME = 3 * DEEP_SLEEP_TIME
 SAMPLES_TO_AVERAGE = 3
 
 log = logging.getLogger(__name__)
