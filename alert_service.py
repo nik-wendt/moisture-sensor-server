@@ -95,7 +95,7 @@ def main():
 
         missing_sensors = check_for_missing_devices(sensors, db)
         log.info("Missing sensors: %s", missing_sensors)
-        sensor_names = [sensor.name for sensor in missing_sensors]
+        sensor_names = [sensor.name for sensor in missing_sensors if sensor.status != StatusChoices.BLACK]
         if missing_sensors:
             send_ntfy_message(
                 f"The following sensors have not reported in over {MISSING_SENSOR_THRESHOLD_TIME} seconds:\n {"\n".join(sensor_names)}",
@@ -110,7 +110,7 @@ def main():
         log.info("Yellow alerts: %s", yellow_alerts)
 
         if red_alerts:
-            sensor_names = [sensor.name for sensor in red_alerts]
+            sensor_names = [sensor.name for sensor in red_alerts if sensor.status != StatusChoices.RED]
             send_ntfy_message(
                 f"The following sensors have breached their red threshold:\n {"\n".join(sensor_names)}",
                 priority=5,
@@ -120,7 +120,7 @@ def main():
             log.info("Sent red alerts")
 
         if yellow_alerts:
-            sensor_names = [sensor.name for sensor in yellow_alerts]
+            sensor_names = [sensor.name for sensor in yellow_alerts if sensor.status != StatusChoices.YELLOW]
             send_ntfy_message(
                 f"The following sensors have breached their yellow threshold:\n {"\n".join(sensor_names)}",
                 priority=4,
