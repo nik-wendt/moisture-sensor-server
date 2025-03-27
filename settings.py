@@ -3,7 +3,7 @@ import logging
 from envparse import env
 
 log = logging.getLogger(__name__)
-DEBUG = env.bool('DEBUG', default=False)
+DEBUG = env.bool('DEBUG', default=True)
 LOG_LEVEL = logging.DEBUG if DEBUG else logging.INFO
 log.setLevel(LOG_LEVEL)
 log.info("Logging set up at level %s", LOG_LEVEL)

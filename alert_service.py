@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import logging
 import time
 from datetime import datetime, timedelta, UTC, timezone
@@ -6,12 +8,13 @@ import requests
 
 from db_setup import SessionLocal, StatusChoices
 from db_setup import Sensors, SensorData
+from sensor_code.config import LOW_BATT_VALUE, DEEP_SLEEP_TIME
 
 SLEEP_TIME = 300
 NTFY_URL = "http://pi-server:80/"
 NTFY_TOPIC = "moisture_sensor"
 # MISSING_SENSOR_THRESHOLD_TIME = 86400 # 1 day
-MISSING_SENSOR_THRESHOLD_TIME = 300
+MISSING_SENSOR_THRESHOLD_TIME = 3 * DEEP_SLEEP_TIME
 SAMPLES_TO_AVERAGE = 3
 
 log = logging.getLogger(__name__)
@@ -87,6 +90,35 @@ def send_ntfy_message(
     print(response.status_code, response.text)
 
 
+@dataclass
+class LowBatterySensor:
+    sensor: Sensors
+    battery_value: float
+
+
+def check_for_low_battery(sensors, db=None) -> list[LowBatterySensor]:
+    if not db:
+        db = get_db_session()
+
+    sensors_with_low_battery = []
+    for sensor in sensors:
+        # Check last 3 sensor data records for battery value
+        readings = (
+            db
+            .query(SensorData)
+            .join(Sensors, SensorData.sensor_id == Sensors.id)
+            .filter(SensorData.sensor_id == sensor.id)
+            .order_by(SensorData.created_at.desc())
+            .limit(SAMPLES_TO_AVERAGE)
+            .all()
+        )
+
+        average_of_past_x_samples = sum([data.battery_value for data in readings if data.battery_value is not None]) / SAMPLES_TO_AVERAGE
+        if average_of_past_x_samples < LOW_BATT_VALUE:
+            sensors_with_low_battery.append(LowBatterySensor(sensor=sensor, battery_value=average_of_past_x_samples))
+
+    return sensors_with_low_battery
+
 def main():
     while True:
         log.info("Checking for missing sensors & threshold breaches")
@@ -98,7 +130,8 @@ def main():
         sensor_names = [sensor.name for sensor in missing_sensors if sensor.status != StatusChoices.BLACK]
         if missing_sensors:
             send_ntfy_message(
-                f"The following sensors have not reported in over {MISSING_SENSOR_THRESHOLD_TIME} seconds:\n {"\n".join(sensor_names)}",
+                f"The following sensors have not reported in over {MISSING_SENSOR_THRESHOLD_TIME} seconds:\n {"\n".join(sensor_names)}\n"
+                f"Marking sensor as inactive. Reactivate with this link: http://pi-server:3000/sensor-data/{sensor.id}",
                 priority=3,
                 title="Missing Moisture Sensors",
                 tags="see_no_evil"
@@ -129,6 +162,18 @@ def main():
             )
             log.info("Sent yellow alerts")
 
+
+        low_bat_sensors = check_for_low_battery(sensors, db)
+        if low_bat_sensors:
+            sensor_names = [sensor.sensor.name for sensor in low_bat_sensors]
+            send_ntfy_message(
+                f"The following sensors have low battery:\n {"\n".join(sensor_names)}\n",
+                priority=2,
+                title="Low Battery",
+                tags="battery"
+            )
+            log.info("Sent low battery alerts")
+
         # save statuses to the database
         for sensor in red_alerts:
             sensor.status = StatusChoices.RED
@@ -138,6 +183,7 @@ def main():
             sensor.status = StatusChoices.GREEN
         for sensor in missing_sensors:
             sensor.status = StatusChoices.BLACK
+            sensor.active = False
 
         db.commit()
         db.close()

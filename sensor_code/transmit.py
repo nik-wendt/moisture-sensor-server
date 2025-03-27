@@ -10,7 +10,7 @@ from log import logger
 from enums import WakeError
 
 
-def send_data(data):
+def send_data(data, timeout=10):
     """Connect to wifi and send data"""
     try:
         logger.log("Connecting to WIFI")
@@ -26,7 +26,7 @@ def send_data(data):
 
     try:
         logger.log(f"sending data: {data} to {API_URL}")
-        response = requests.post(API_URL, json=data, timeout=100)
+        response = requests.post(API_URL, json=data, timeout=timeout)
         if response.status_code != 200:
             logger.log(response.status_code)
             logger.log(response.content)
