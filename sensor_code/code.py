@@ -63,11 +63,20 @@ def main():
 
     alarm.exit_and_deep_sleep_until_alarms(time_alarm, preserve_dios=preserve_dios)
 
+def soil_sensor():
+    from config import EXT_PWR_PIN
+    while True:
+        io_manager = IOManager()
+        station = SoilStation(io_manager)
+        print(station.measure_soil())
+        print(io_manager.get_digital_ios())
+        time.sleep(2)
+
 if __name__ == "__main__":
     logger.log("\n\n")
     logger.log("Starting program")
     if not supervisor.runtime.usb_connected:
         main()
     else:
-        print("Connected to usb...")
+        # soil_sensor()
         main()

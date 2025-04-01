@@ -14,6 +14,7 @@ def send_data(data, timeout=10):
     """Connect to wifi and send data"""
     try:
         logger.log("Connecting to WIFI")
+        wifi.radio.tx_power = 15
         wifi.radio.connect(WIFI_SSID, WIFI_PW)
         logger.log("WIFI connected")
     except Exception as e:
