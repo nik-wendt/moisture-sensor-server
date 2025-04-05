@@ -13,6 +13,9 @@ from db_setup import Sensors, SensorData
 from models import SensorRequest, SensorDataRequest, SensorDataFilters
 from db_setup import SessionLocal
 
+from settings import MAX_ANALOG_VALUE
+from utils import get_value_percentage
+
 router = APIRouter()
 
 def create_sensor(mac_address: str, db_session = None):
@@ -23,8 +26,8 @@ def create_sensor(mac_address: str, db_session = None):
         id=id,
         mac_address=mac_address,
         name=f"Unnamed Sensor - {id}",
-        threshold_green=20000,
-        threshold_yellow=10000,
+        threshold_green=50,
+        threshold_yellow=33,
         threshold_red=1,
         description="A moisture sensor"
     )
@@ -36,7 +39,7 @@ def create_sensor(mac_address: str, db_session = None):
 @router.post("/log")
 async def log_request(log_entry: SensorDataRequest):
     """Logs incoming POST request to the database."""
-    max_value = 65535
+    max_value = MAX_ANALOG_VALUE
     try:
         # Create a DB session
         db = SessionLocal()
@@ -47,6 +50,7 @@ async def log_request(log_entry: SensorDataRequest):
         sensor_data = SensorData(
             sensor_id=sensor.id,
             value=max_value - log_entry.value,
+            battery_value=log_entry.battery,
         )
 
         # Add and commit the log entry to the database
@@ -92,6 +96,7 @@ async def get_sensor_data(params: SensorDataFilters = Depends()):
                 subq.c.sensor_id,
                 subq.c.value,
                 subq.c.created_at,
+                subq.c.battery_value,
                 Sensors.name.label("name"),
                 Sensors.status.label("status"),
                 Sensors.active.label("active"),
@@ -142,11 +147,13 @@ async def get_sensor_data(params: SensorDataFilters = Depends()):
         records = [
             {
                 "sensor_id": record.sensor_id,
-                "value": record.value,
+                "raw_value": record.value,
+                "value": get_value_percentage(record.value),
                 "created_at": record.created_at,
                 "status": record.status,
                 "name": record.name,
                 "active": record.active,
+                "battery_value": record.battery_value
             }
             for record in logs
         ]
@@ -194,8 +201,23 @@ async def get_logs(
             .order_by(SensorData.created_at.asc())
             .all()
         )
-
-        return {"records": [log.__dict__ for log in logs]}
+        return {
+            "records": [
+                {
+                    "sensor_id": sensor_id,
+                    "raw_value": log.value,
+                    "value": get_value_percentage(log.value),
+                    "created_at": log.created_at,
+                    "status": log.sensor.status,
+                    "name": log.sensor.name,
+                    "active": log.sensor.active,
+                    "description": log.sensor.description,
+                    "threshold_green": log.sensor.threshold_green,
+                    "threshold_yellow": log.sensor.threshold_yellow,
+                    "threshold_red": log.sensor.threshold_red,
+                    "sensor": log.sensor,                        
+                    } 
+                for log in logs ]}
     except SQLAlchemyError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

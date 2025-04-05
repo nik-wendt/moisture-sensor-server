@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from dataclasses import dataclass
 
 import logging
@@ -8,13 +10,16 @@ import requests
 
 from db_setup import SessionLocal, StatusChoices
 from db_setup import Sensors, SensorData
-from sensor_code.config import LOW_BATT_VALUE, DEEP_SLEEP_TIME
+
+from utils import get_value_percentage
+
+LOW_BATT_VALUE = 33200
 
 SLEEP_TIME = 300
 NTFY_URL = "http://pi-server:80/"
 NTFY_TOPIC = "moisture_sensor"
-# MISSING_SENSOR_THRESHOLD_TIME = 86400 # 1 day
-MISSING_SENSOR_THRESHOLD_TIME = 3 * DEEP_SLEEP_TIME
+# MISSING_SENSOR_THRESHOLD_TIME_SECONDS = 86400 # 1 day
+MISSING_SENSOR_THRESHOLD_TIME_SECONDS = 1 * 60 * 60
 SAMPLES_TO_AVERAGE = 3
 
 log = logging.getLogger(__name__)
@@ -39,7 +44,7 @@ def check_for_missing_devices(sensors, db=None):
             .order_by(SensorData.created_at.desc()).first()
         )
         latest_sensor_data_datetime = latest_data.created_at
-        if latest_data and latest_sensor_data_datetime > (datetime.now() - timedelta(seconds=MISSING_SENSOR_THRESHOLD_TIME)):
+        if latest_data and latest_sensor_data_datetime > (datetime.now() - timedelta(seconds=MISSING_SENSOR_THRESHOLD_TIME_SECONDS)):
             continue
         else:
             missing_sensors.append(sensor)
@@ -66,6 +71,9 @@ def check_for_threshold_breaches(sensors, db=None):
         )
 
         average_of_past_x_samples = sum([data.value for data in readings]) / SAMPLES_TO_AVERAGE
+        # convert to percentage
+        average_of_past_x_samples = get_value_percentage(average_of_past_x_samples)
+        log.info("Sensor %s: Average of past %s samples: %s", sensor.name, SAMPLES_TO_AVERAGE, average_of_past_x_samples)
         if average_of_past_x_samples > sensor.threshold_green:
             status_greens.append(sensor)
         elif average_of_past_x_samples > sensor.threshold_yellow:
@@ -130,8 +138,7 @@ def main():
         sensor_names = [sensor.name for sensor in missing_sensors if sensor.status != StatusChoices.BLACK]
         if missing_sensors:
             send_ntfy_message(
-                f"The following sensors have not reported in over {MISSING_SENSOR_THRESHOLD_TIME} seconds:\n {"\n".join(sensor_names)}\n"
-                f"Marking sensor as inactive. Reactivate with this link: http://pi-server:3000/sensor-data/{sensor.id}",
+                f"The following sensors have not reported in over {MISSING_SENSOR_THRESHOLD_TIME_SECONDS} seconds: {"".join(sensor_names)}. Marking sensor as inactive.",
                 priority=3,
                 title="Missing Moisture Sensors",
                 tags="see_no_evil"
@@ -146,7 +153,7 @@ def main():
             sensor_names = [sensor.name for sensor in red_alerts if sensor.status != StatusChoices.RED]
             send_ntfy_message(
                 f"The following sensors have breached their red threshold:\n {"\n".join(sensor_names)}",
-                priority=5,
+                priority=3,
                 title="Red Alert",
                 tags="fire"
             )
@@ -156,7 +163,7 @@ def main():
             sensor_names = [sensor.name for sensor in yellow_alerts if sensor.status != StatusChoices.YELLOW]
             send_ntfy_message(
                 f"The following sensors have breached their yellow threshold:\n {"\n".join(sensor_names)}",
-                priority=4,
+                priority=2,
                 title="Yellow Alert",
                 tags="warning"
             )
@@ -194,4 +201,5 @@ def main():
 
 
 if __name__ == "__main__":
+    log.info("Starting alert service")
     main()

@@ -30,8 +30,7 @@ RUN pip install poetry
 RUN poetry install
 
 FROM base AS alert_service
-CMD ["poetry", "run", "python", "alert_service.py"]
-#CMD ["sleep", "1000"]
+CMD ["poetry", "run", "python", "autoreload.py", "alert_service.py"]
 
 FROM base AS api_service
-CMD ["poetry", "run", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["poetry", "run", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

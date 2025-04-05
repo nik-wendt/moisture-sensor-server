@@ -2,7 +2,7 @@ import alarm
 import supervisor
 import time
 
-from config import DEEP_SLEEP_TIME, WIFI_SSID, WIFI_PW, API_URL
+from config import SLEEP_TIME_MINS, WIFI_SSID, WIFI_PW, API_URL
 from soilstation import SoilStation
 from log import logger
 from ioregistry import IOManager

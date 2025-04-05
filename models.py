@@ -9,6 +9,7 @@ class SensorDataRequest(BaseModel):
     mac_address: str
     value: float
     created_at: str | None = None
+    battery: float | None = None
 
 class SensorRequest(BaseModel):
     name: str = None

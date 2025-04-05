@@ -2,3 +2,4 @@ API_URL = "http://192.168.1.239:8000/log"
 WIFI_SSID = "Room With A Moose (2.4GHz)"
 WIFI_PW = "linkisatwunk"
 SLEEP_TIME_MINS = 30
+LOW_BAT_VALUE = 33200
