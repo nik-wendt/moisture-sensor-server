@@ -10,6 +10,8 @@ Based around the esp32-s3 xiao from Seeed Studio, but project could be adapted t
 
 ## The server
 Fast api on postgress with SqlAlchemy in between. Alembic used for db migrations. 
+###
+Included MCU code is provided. Deployed onto the xiao board with circuitpython 9.xx
 
 ### TODOs:
 - Clean up alembic with a nice squash now this is 1.0-ish
