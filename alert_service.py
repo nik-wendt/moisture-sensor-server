@@ -202,4 +202,7 @@ def main():
 
 if __name__ == "__main__":
     log.info("Starting alert service")
-    main()
+    try: 
+        main()
+    except Exception as e:
+        log.error(e)

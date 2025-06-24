@@ -56,9 +56,9 @@ def main():
         preserve_dios = io_manager.get_digital_ios()
 
     with TryThing(wake_error=WakeError.SLEEP):
-        logger.log(f"Going to sleep for {DEEP_SLEEP_TIME}")
+        logger.log(f"Going to sleep for {SLEEP_TIME_MINS}")
         time_alarm = alarm.time.TimeAlarm(
-            monotonic_time=time.monotonic() + DEEP_SLEEP_TIME
+            monotonic_time=time.monotonic() + SLEEP_TIME_MINS
         )
 
     alarm.exit_and_deep_sleep_until_alarms(time_alarm, preserve_dios=preserve_dios)
