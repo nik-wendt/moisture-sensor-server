@@ -18,7 +18,8 @@ from utils import get_value_percentage
 
 router = APIRouter()
 
-def create_sensor(mac_address: str, db_session = None):
+
+def create_sensor(mac_address: str, db_session=None):
     if not db_session:
         db_session = SessionLocal()
     id = shortuuid.uuid()
@@ -29,12 +30,13 @@ def create_sensor(mac_address: str, db_session = None):
         threshold_green=50,
         threshold_yellow=33,
         threshold_red=1,
-        description="A moisture sensor"
+        description="A moisture sensor",
     )
     db_session.add(sensor)
     db_session.commit()
     db_session.refresh(sensor)
     return sensor
+
 
 @router.post("/log")
 async def log_request(log_entry: SensorDataRequest):
@@ -44,7 +46,11 @@ async def log_request(log_entry: SensorDataRequest):
         # Create a DB session
         db = SessionLocal()
         # get sensor id from mac address
-        sensor = db.query(Sensors).filter(Sensors.mac_address == log_entry.mac_address).first()
+        sensor = (
+            db.query(Sensors)
+            .filter(Sensors.mac_address == log_entry.mac_address)
+            .first()
+        )
         if not sensor:
             sensor = create_sensor(log_entry.mac_address, db)
         sensor_data = SensorData(
@@ -73,21 +79,24 @@ async def log_request(log_entry: SensorDataRequest):
     finally:
         db.close()
 
+
 @router.get("/sensor-data")
 async def get_sensor_data(params: SensorDataFilters = Depends()):
     try:
         db = SessionLocal()
 
+        total_sensors = db.query(Sensors).count()
+        total_active_sensors = db.query(Sensors).filter(Sensors.active == True).count()
+
         # Create a subquery using a window function to pick the latest record per sensor.
-        subq = (
-            db.query(
-                SensorData,
-                func.row_number().over(
-                    partition_by=SensorData.sensor_id,
-                    order_by=SensorData.created_at.desc()
-                ).label("rn")
-            ).subquery()
-        )
+        subq = db.query(
+            SensorData,
+            func.row_number()
+            .over(
+                partition_by=SensorData.sensor_id, order_by=SensorData.created_at.desc()
+            )
+            .label("rn"),
+        ).subquery()
 
         # Query only the latest record per sensor by filtering on rn == 1.
         query = (
@@ -126,7 +135,9 @@ async def get_sensor_data(params: SensorDataFilters = Depends()):
             else:
                 sort_field = subq.c.id
 
-            sort_field = sort_field.desc() if params.order == "desc" else sort_field.asc()
+            sort_field = (
+                sort_field.desc() if params.order == "desc" else sort_field.asc()
+            )
             query = query.order_by(sort_field)
         else:
             # Default sorting by last updated.
@@ -135,13 +146,18 @@ async def get_sensor_data(params: SensorDataFilters = Depends()):
         if params.search:
             # search by name and id
             query = query.filter(
-                Sensors.name.ilike(f"%{params.search}%") | Sensors.id.ilike(f"%{params.search}%")
+                Sensors.name.ilike(f"%{params.search}%")
+                | Sensors.id.ilike(f"%{params.search}%")
             )
 
         total = query.count()
 
         # Apply pagination.
-        logs = query.offset((params.page - 1) * params.page_size).limit(params.page_size).all()
+        logs = (
+            query.offset((params.page - 1) * params.page_size)
+            .limit(params.page_size)
+            .all()
+        )
 
         # Process the results.
         records = [
@@ -153,12 +169,17 @@ async def get_sensor_data(params: SensorDataFilters = Depends()):
                 "status": record.status,
                 "name": record.name,
                 "active": record.active,
-                "battery_value": record.battery_value
+                "battery_value": record.battery_value,
             }
             for record in logs
         ]
 
-        return {"records": records, "total": total}
+        return {
+            "records": records,
+            "total": total,
+            "total_active_sensors": total_active_sensors,
+            "total_sensors": total_sensors,
+        }
 
     except SQLAlchemyError as e:
         raise HTTPException(
@@ -176,9 +197,12 @@ async def get_sensor_data(params: SensorDataFilters = Depends()):
 
 @router.get("/sensor-data/{sensor_id}")
 async def get_logs(
-        sensor_id: str,
-        start_date: Optional[datetime] = Query(None, description="Start date in ISO format"),
-        end_date: Optional[datetime] = Query(None, description="End date in ISO format")):
+    sensor_id: str,
+    start_date: Optional[datetime] = Query(
+        None, description="Start date in ISO format"
+    ),
+    end_date: Optional[datetime] = Query(None, description="End date in ISO format"),
+):
     """Returns all log entries for a specific sensor."""
     try:
         # Create a DB session
@@ -196,11 +220,7 @@ async def get_logs(
             query = query.filter(SensorData.created_at <= end_date)
 
         # Query all log entries for the specified sensor
-        logs = (
-            query
-            .order_by(SensorData.created_at.asc())
-            .all()
-        )
+        logs = query.order_by(SensorData.created_at.asc()).all()
         return {
             "records": [
                 {
@@ -215,9 +235,11 @@ async def get_logs(
                     "threshold_green": log.sensor.threshold_green,
                     "threshold_yellow": log.sensor.threshold_yellow,
                     "threshold_red": log.sensor.threshold_red,
-                    "sensor": log.sensor,                        
-                    } 
-                for log in logs ]}
+                    "sensor": log.sensor,
+                }
+                for log in logs
+            ]
+        }
     except SQLAlchemyError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -250,6 +272,7 @@ async def update_sensor(sensor_id: str, sensor_update: SensorRequest):
         )
     finally:
         db.close()
+
 
 @router.delete("/sensors/{sensor_id}")
 async def delete_sensor(sensor_id: str):
