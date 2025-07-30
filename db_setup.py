@@ -1,7 +1,16 @@
 import enum
 import logging
 
-from sqlalchemy import create_engine, Enum, Column, String, ForeignKey, Float, Boolean, DateTime
+from sqlalchemy import (
+    create_engine,
+    Enum,
+    Column,
+    String,
+    ForeignKey,
+    Float,
+    Boolean,
+    DateTime,
+)
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.ext.declarative import declarative_base
 import shortuuid
@@ -25,6 +34,7 @@ class StatusChoices(str, enum.Enum):
     RED = "red"
     BLACK = "black"
 
+
 class Sensors(Base):
     __tablename__ = "Sensors"
 
@@ -45,9 +55,11 @@ class SensorData(Base):
     __tablename__ = "SensorData"
 
     id = Column(String, primary_key=True, index=True, default=lambda: shortuuid.uuid())
-    sensor_id = Column(String, ForeignKey("Sensors.id"), nullable=False)
+    sensor_id = Column(String, ForeignKey("Sensors.id"), nullable=True)
     value = Column(Float, nullable=False)
-    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(
+        DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
     battery_value = Column(Float, nullable=True)
 
     sensor = relationship("Sensors", back_populates="data")
