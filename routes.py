@@ -9,9 +9,11 @@ from sqlalchemy.orm import aliased, Session, joinedload
 from sqlalchemy import func, asc, desc
 from fastapi import HTTPException, status
 
+import alert_service
 from db_setup import Sensors, SensorData
 from models import SensorRequest, SensorDataRequest, SensorDataFilters
 from db_setup import SessionLocal
+
 
 from settings import MAX_ANALOG_VALUE
 from utils import get_value_percentage
@@ -253,7 +255,7 @@ async def get_logs(
 async def update_sensor(sensor_id: str, sensor_update: SensorRequest):
     try:
         db = SessionLocal()
-        sensor = db.query(Sensors).filter(Sensors.id == sensor_id).first()
+        sensor = db.qu(Sensors).filter(Sensors.id == sensor_id).first()
         if not sensor:
             raise HTTPException(status_code=404, detail="Sensor not found")
 
@@ -264,6 +266,9 @@ async def update_sensor(sensor_id: str, sensor_update: SensorRequest):
 
         db.commit()
         db.refresh(sensor)
+
+        alert_service.run_update_alerts()
+
         return sensor
     except SQLAlchemyError as e:
         raise HTTPException(

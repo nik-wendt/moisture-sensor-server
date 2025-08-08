@@ -147,7 +147,7 @@ def check_for_low_battery(sensors, db=None) -> list[LowBatterySensor]:
     return sensors_with_low_battery
 
 
-def main():
+def run_update_alerts():
     while True:
         log.info("Checking for missing sensors & threshold breaches")
         db = get_db_session()
@@ -233,6 +233,6 @@ def main():
 if __name__ == "__main__":
     log.info("Starting alert service")
     try:
-        main()
+        run_update_alerts()
     except Exception as e:
         log.error(e)
