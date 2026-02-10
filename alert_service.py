@@ -214,10 +214,13 @@ def run_update_alerts():
         # save statuses to the database
         for sensor in red_alerts:
             sensor.status = StatusChoices.RED
+            sensor.active = True
         for sensor in yellow_alerts:
             sensor.status = StatusChoices.YELLOW
+            sensor.active = True
         for sensor in status_greens:
             sensor.status = StatusChoices.GREEN
+            sensor.active = True
         for sensor in missing_sensors:
             sensor.status = StatusChoices.BLACK
             sensor.active = False
