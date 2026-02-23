@@ -148,86 +148,89 @@ def check_for_low_battery(sensors, db=None) -> list[LowBatterySensor]:
 
 
 def run_update_alerts():
-    while True:
-        log.info("Checking for missing sensors & threshold breaches")
-        db = get_db_session()
-        sensors = db.query(Sensors).filter(Sensors.active == True)
+    log.info("Checking for missing sensors & threshold breaches")
+    db = get_db_session()
+    sensors = db.query(Sensors).filter(Sensors.active == True)
 
-        missing_sensors = check_for_missing_devices(sensors, db)
-        log.info("Missing sensors: %s", missing_sensors)
+    missing_sensors = check_for_missing_devices(sensors, db)
+    log.info("Missing sensors: %s", missing_sensors)
+    sensor_names = [
+        sensor.name
+        for sensor in missing_sensors
+        if sensor.status != StatusChoices.BLACK
+    ]
+    # if missing_sensors:
+    #     send_ntfy_message(
+    #         f"The following sensors have not reported in over {MISSING_SENSOR_THRESHOLD_TIME_SECONDS} seconds: {''.join(sensor_names)}. Marking sensor as inactive.",
+    #         priority=3,
+    #         title="Missing Moisture Sensors",
+    #         tags="see_no_evil",
+    #     )
+    log.info("Sent missing sensor alerts")
+
+    red_alerts, yellow_alerts, status_greens = check_for_threshold_breaches(sensors, db)
+    log.info("Red alerts: %s", red_alerts)
+    log.info("Yellow alerts: %s", yellow_alerts)
+
+    if red_alerts:
         sensor_names = [
-            sensor.name
-            for sensor in missing_sensors
-            if sensor.status != StatusChoices.BLACK
+            sensor.name for sensor in red_alerts if sensor.status != StatusChoices.RED
         ]
-        # if missing_sensors:
-        #     send_ntfy_message(
-        #         f"The following sensors have not reported in over {MISSING_SENSOR_THRESHOLD_TIME_SECONDS} seconds: {''.join(sensor_names)}. Marking sensor as inactive.",
-        #         priority=3,
-        #         title="Missing Moisture Sensors",
-        #         tags="see_no_evil",
-        #     )
-        log.info("Sent missing sensor alerts")
-
-        red_alerts, yellow_alerts, status_greens = check_for_threshold_breaches(
-            sensors, db
+        send_ntfy_message(
+            f"The following sensors have breached their red threshold:\n {'\n'.join(sensor_names)}",
+            priority=3,
+            title="Red Alert",
+            tags="fire",
         )
-        log.info("Red alerts: %s", red_alerts)
-        log.info("Yellow alerts: %s", yellow_alerts)
+        log.info("Sent red alerts")
 
-        if red_alerts:
-            sensor_names = [
-                sensor.name
-                for sensor in red_alerts
-                if sensor.status != StatusChoices.RED
-            ]
-            send_ntfy_message(
-                f"The following sensors have breached their red threshold:\n {'\n'.join(sensor_names)}",
-                priority=3,
-                title="Red Alert",
-                tags="fire",
-            )
-            log.info("Sent red alerts")
+    # if yellow_alerts:
+    #     sensor_names = [sensor.name for sensor in yellow_alerts if sensor.status != StatusChoices.YELLOW]
+    #     send_ntfy_message(
+    #         f"The following sensors have breached their yellow threshold:\n {"\n".join(sensor_names)}",
+    #         priority=2,
+    #         title="Yellow Alert",
+    #         tags="warning"
+    #     )
+    #     log.info("Sent yellow alerts")
+    #
 
-        # if yellow_alerts:
-        #     sensor_names = [sensor.name for sensor in yellow_alerts if sensor.status != StatusChoices.YELLOW]
-        #     send_ntfy_message(
-        #         f"The following sensors have breached their yellow threshold:\n {"\n".join(sensor_names)}",
-        #         priority=2,
-        #         title="Yellow Alert",
-        #         tags="warning"
-        #     )
-        #     log.info("Sent yellow alerts")
-        #
+    low_bat_sensors = check_for_low_battery(sensors, db)
+    if low_bat_sensors:
+        sensor_names = [sensor.sensor.name for sensor in low_bat_sensors]
+        send_ntfy_message(
+            f"The following sensors have low battery:\n {'\n'.join(sensor_names)}\n",
+            priority=2,
+            title="Low Battery",
+            tags="battery",
+        )
+        log.info("Sent low battery alerts")
 
-        low_bat_sensors = check_for_low_battery(sensors, db)
-        if low_bat_sensors:
-            sensor_names = [sensor.sensor.name for sensor in low_bat_sensors]
-            send_ntfy_message(
-                f"The following sensors have low battery:\n {'\n'.join(sensor_names)}\n",
-                priority=2,
-                title="Low Battery",
-                tags="battery",
-            )
-            log.info("Sent low battery alerts")
+    # save statuses to the database
+    for sensor in red_alerts:
+        sensor.status = StatusChoices.RED
+        sensor.active = True
+    for sensor in yellow_alerts:
+        sensor.status = StatusChoices.YELLOW
+        sensor.active = True
+    for sensor in status_greens:
+        sensor.status = StatusChoices.GREEN
+        sensor.active = True
+    for sensor in missing_sensors:
+        sensor.status = StatusChoices.BLACK
+        sensor.active = False
 
-        # save statuses to the database
-        for sensor in red_alerts:
-            sensor.status = StatusChoices.RED
-            sensor.active = True
-        for sensor in yellow_alerts:
-            sensor.status = StatusChoices.YELLOW
-            sensor.active = True
-        for sensor in status_greens:
-            sensor.status = StatusChoices.GREEN
-            sensor.active = True
-        for sensor in missing_sensors:
-            sensor.status = StatusChoices.BLACK
-            sensor.active = False
+    db.commit()
+    db.close()
 
-        db.commit()
-        db.close()
+    log.info("Sleeping for %s seconds", SLEEP_TIME)
+    time.sleep(SLEEP_TIME)
+    log.info("Waking up. Starting next check...")
 
+
+def main_event_loop():
+    while True:
+        run_update_alerts()
         log.info("Sleeping for %s seconds", SLEEP_TIME)
         time.sleep(SLEEP_TIME)
         log.info("Waking up. Starting next check...")
@@ -236,6 +239,6 @@ def run_update_alerts():
 if __name__ == "__main__":
     log.info("Starting alert service")
     try:
-        run_update_alerts()
+        main_event_loop()
     except Exception as e:
         log.error(e)
