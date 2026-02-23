@@ -255,7 +255,7 @@ async def get_logs(
 async def update_sensor(sensor_id: str, sensor_update: SensorRequest):
     try:
         db = SessionLocal()
-        sensor = db.qu(Sensors).filter(Sensors.id == sensor_id).first()
+        sensor = db.query(Sensors).filter(Sensors.id == sensor_id).first()
         if not sensor:
             raise HTTPException(status_code=404, detail="Sensor not found")
 
