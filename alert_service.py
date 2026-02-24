@@ -147,8 +147,6 @@ def check_for_low_battery(sensors, db=None) -> list[LowBatterySensor]:
     return sensors_with_low_battery
 
 
-def run_update_alerts():
-    log.info("Checking for missing sensors & threshold breaches")
     db = get_db_session()
     sensors = db.query(Sensors).filter(Sensors.active == True)
 
@@ -222,10 +220,6 @@ def run_update_alerts():
 
     db.commit()
     db.close()
-
-    log.info("Sleeping for %s seconds", SLEEP_TIME)
-    time.sleep(SLEEP_TIME)
-    log.info("Waking up. Starting next check...")
 
 
 def main_event_loop():

@@ -1,0 +1,38 @@
+services:
+    run_migration:
+        build:
+           context: .
+           dockerfile: Dockerfile
+           target: api_service
+        environment:
+           DATABASE_URL: 'postgresql://postgres:postgres@postgres:5432/postgres'
+        profiles:
+           - tools
+        volumes:
+           - ./:/app
+        command: 
+           - poetry
+           - run
+           - alembic
+           - upgrade
+           - head
+
+    # create_migration:
+    #     build:
+    #         context: .
+    #         dockerfile: Dockerfile
+    #         target: api_service
+    #     environment:
+    #         DATABASE_URL: 'postgresql://postgres:postgres@postgres:5432/postgres'
+    #     depends_on:
+    #         -   postgres
+    #     profiles:
+    #         - tools
+    #     volumes:
+    #         - ./:/app
+    #     command: 
+    #       - poetry
+    #       - run
+    #       - alembic
+    #       - revision
+    #       - --autogenerate
