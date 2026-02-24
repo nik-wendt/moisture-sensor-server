@@ -8,6 +8,7 @@ services:
             - "8000:8000"
         environment:
             DATABASE_URL: 'postgresql://postgres:postgres@postgres:5432/postgres'
+            LOG_LEVEL: debug
         depends_on:
             -   postgres
         volumes:
@@ -40,6 +41,7 @@ services:
             target: alert_service
         environment:
             DATABASE_URL: 'postgresql://postgres:postgres@postgres:5432/postgres'
+            LOG_LEVEL: debug
         depends_on:
             - postgres
         volumes:
